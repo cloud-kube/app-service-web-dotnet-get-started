@@ -35,11 +35,10 @@ jobs:
       uses: NuGet/setup-nuget@v1.0.2
       - name: Building AppCode
         shell: powershell
-        working-directory: C:\Users\osadmin\actions-runner\_work
         run: |  
               Import-Module 'C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\Tools\Microsoft.VisualStudio.DevShell.dll'
               Enter-VsDevShell df0f207e
-              cd '.\app-service-web-dotnet-get-started\app-service-web-dotnet-get-started'
+              cd 'C:\Users\osadmin\actions-runner\_work\app-service-web-dotnet-get-started\app-service-web-dotnet-get-started'
               MSBuild
               #MSBuild /p:'configuration="release";platform="any cpu";WebPublishMethod=Package;PackageFileName="package.zip";PackageAsSingleFile=true;DeployOnBuild=true;DeployTarget=Package'
       # - uses: actions/upload-artifact@v3
