@@ -1,0 +1,249 @@
+name: SBX-EntApp-IAC
+# Trigger on commit to master and appropriate folder paths for dev 
+on:
+  workflow_dispatch:  
+    inputs:
+      run_id:
+        description: Terraform plan artifact RUN_ID - To Be Applied
+        required: false
+        default: null
+      mode:
+        description: generate_plan_only or apply_existing_plan
+        required: true
+        default: generate_plan_only
+        type: choice
+        options:
+        - generate_plan_only
+        - apply_existing_plan  
+      stack_name_to_run:
+        description: Select a stack
+        required: true
+        default: 1_rg_appspoke
+        type: choice
+        options:
+        - all
+        - 1_rg_appspoke
+        - 2_network_hub 
+        - 3_network_appspoke
+        - 4_deploy_keyvault
+        - 5_deploy_app_service_coa
+        - 6_deploy_app_service_csi
+        - 7_deploy_app_service_smis
+        - 8_deploy_app_service_iworkflow
+        - 9_deploy_app_service_cso
+        - 10_deploy_host_agent
+        - 11_deploy_jumpbox
+        - 12_deploy_storage
+        - 13_deploy_postgres
+        - 14_deploy_redis
+        - 15_deploy_app_gateway
+      location:
+        description: Select a location to build the stack on.
+        required: true
+        default: southeastasia
+        type: choice
+        options:
+        - southeastasia 
+  pull_request:
+  push:
+env:  
+  RUN_ID: ${{ github.event.inputs.run_id }}
+  GITHUB_RUN_ID: ${{ github.run_id }}
+  TS_ENV: 'sbx'  
+  ARM_CLIENT_ID: ${{ secrets.SBX_ARM_CLIENT_ID }}
+  ARM_CLIENT_SECRET: ${{ secrets.SBX_ARM_CLIENT_SECRET }}
+  ARM_LOCATION: ${{ github.event.inputs.location }}
+  ARM_SUBSCRIPTION_ID: ${{ secrets.SBX_ARM_SUBSCRIPTION_ID }}
+  ARM_TENANT_ID: ${{ secrets.SBX_ARM_TENANT_ID }}
+  STACK_NAME_TO_RUN: ${{ github.event.inputs.stack_name_to_run }}      
+jobs:
+  CodeQL-Build:
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
+    # CodeQL runs on ubuntu-latest, windows-latest, and macos-latest
+    runs-on: ubuntu-latest
+
+    permissions:
+      # required for all workflows
+      security-events: write
+
+      # only required for workflows in private repositories
+      actions: read
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+          submodules: recursive
+          token: ${{ secrets.GIT_PAT }}  
+      # Initializes the CodeQL tools for scanning.
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v2
+        # Override language selection by uncommenting this and choosing your languages
+        # with:
+        #   languages: go, javascript, csharp, python, cpp, java
+
+      # Autobuild attempts to build any compiled languages (C/C++, C#, or Java).
+      # If this step fails, then you should remove it and run the build manually (see below).
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v2
+
+      # ℹ️ Command-line programs to run using the OS shell.
+      # 📚 See https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#jobsjob_idstepsrun
+
+      # ✏️ If the Autobuild fails above, remove it and uncomment the following
+      #    three lines and modify them (or add more) to build your code if your
+      #    project uses a compiled language
+
+      #- run: |
+      #     make bootstrap
+      #     make release
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v2  
+  
+  SBX-Validate-EntApp-IAC:
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:  
+      - name: Checkout repository and submodules
+        uses: actions/checkout@v2
+        with:
+          submodules: recursive
+          token: ${{ secrets.GIT_PAT }}   
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.1.2' # Not needed with a .ruby-version file
+          bundler-cache: true # runs 'bundle install' and caches installed gems automatically          
+      - name: Terraspace Validate on PR and Push
+        shell: pwsh
+        run: |
+                $STACKS_TO_RUN = (get-childitem ./app/stacks/ | Select Name).Name
+                foreach($stack in $STACKS_TO_RUN)
+                {
+                  bundle exec terraspace validate $stack 
+                }
+      - name: Run Checkov action - all stacks
+        id: checkov-all-stacks
+        uses: bridgecrewio/checkov-action@master
+        with:
+          directory: app/stacks
+      - uses: actions/upload-artifact@v3
+        with:
+          name: checkov-output
+          path: results.sarif
+           
+  SBX-Plan-EntApp-IAC:
+    if: github.event.inputs.mode == 'generate_plan_only'
+    runs-on: ubuntu-latest
+    steps:  
+      - name: Checkout repository and submodules
+        uses: actions/checkout@v2
+        with:
+          submodules: recursive
+          token: ${{ secrets.GIT_PAT }}   
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.1.2' # Not needed with a .ruby-version file
+          bundler-cache: true # runs 'bundle install' and caches installed gems automatically          
+      - name: Terraspace Validate and Plan - ${{ github.event.inputs.stack_name_to_run }}  
+        shell: pwsh
+        env:
+          STACK_NAME_TO_RUN: ${{ github.event.inputs.stack_name_to_run }}    
+        run: |
+              # when CI/CD triggers STACK_NAME_TO_RUN will be empty.
+              if($ENV:STACK_NAME_TO_RUN -eq 'all' )
+              {
+                $STACKS_TO_RUN = (get-childitem ./app/stacks/ | Select Name).Name
+                foreach($stack in $STACKS_TO_RUN)
+                {
+                  bundle exec terraspace validate $stack 
+                  bundle exec terraspace plan $stack --out "$stack.plan"
+                }
+              }else{
+                  bundle exec terraspace validate $env:STACK_NAME_TO_RUN 
+                  bundle exec terraspace plan $env:STACK_NAME_TO_RUN --out "$env:STACK_NAME_TO_RUN.plan"
+              }       
+              Get-ChildItem *.plan | Compress-Archive -DestinationPath ./terraspace-"$env:GITHUB_RUN_ID".zip
+      - name: Run Checkov action - specific stack
+        if: github.event.inputs.stack_name_to_run  != 'all'
+        id: checkov-individual-stack
+        uses: bridgecrewio/checkov-action@master
+        with:
+          directory: app/stacks/${{ github.event.inputs.stack_name_to_run }}
+      - name: Run Checkov action - all stacks
+        if: github.event.inputs.stack_name_to_run == 'all'
+        id: checkov-all-stacks
+        uses: bridgecrewio/checkov-action@master
+        with:
+          directory: app/stacks
+      - uses: actions/upload-artifact@v3
+        with:
+          name: terraspace-${{ github.run_id }}
+          path: terraspace-${{ github.run_id }}.zip
+      - uses: actions/upload-artifact@v3
+        with:
+          name: checkov-output
+          path: results.sarif
+                        
+  SBX-Apply-EntApp-IAC:
+    if: github.event.inputs.mode == 'apply_existing_plan'
+    runs-on: ubuntu-latest
+    environment: sbx
+    steps:  
+      - name: Create deployment
+        uses: chrnorm/deployment-action@releases/v1
+        id: deployment
+        with:
+          initial_status: in_progress
+          token: ${{ secrets.GIT_PAT }}   
+          environment: sbx
+      - name: Checkout repository and submodules
+        uses: actions/checkout@v2
+        with:
+          submodules: recursive
+          token: ${{ secrets.GIT_PAT }}   
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.1.2' # Not needed with a .ruby-version file
+          bundler-cache: true # runs 'bundle install' and caches installed gems automatically        
+      - name: Download artifact
+        uses: dawidd6/action-download-artifact@v2
+        with:
+          github_token: ${{secrets.GIT_PAT}}
+          workflow: sbx-entapp-iac.yml
+          workflow_conclusion: success
+          run_id: ${{ github.event.inputs.run_id }}
+          name: terraspace-${{ github.event.inputs.run_id }}          
+      - name: Terraspace Apply ${{ env.RUN_ID }} - ${{ github.event.inputs.stack_name_to_run }}  
+        shell: pwsh
+        run: |      
+              $archive_name = "terraspace-" + "$env:RUN_ID" + ".zip"
+              $archive_folder_name = "terraspace-" + "$env:RUN_ID"
+              Expand-Archive $archive_name -Force
+              $STACKS_TO_RUN = (get-childitem $archive_folder_name | Select Name).Name
+              
+              foreach($stack in $STACKS_TO_RUN)
+              {
+                $stack = $stack -split ".plan"
+                $stack = $stack[0]
+                Write-Output "Processing stack - $stack in Folder $archive_folder_name"
+                bundle exec terraspace up $stack --plan "$archive_folder_name/$stack.plan" --auto
+              }
+              
+      - name: Update deployment status (success)
+        if: success()
+        uses: chrnorm/deployment-status@releases/v1
+        with:
+          token: ${{ secrets.GIT_PAT }}   
+          state: "success"
+          deployment_id: ${{ steps.deployment.outputs.deployment_id }}
+      - name: Update deployment status (failure)
+        if: failure()
+        uses: chrnorm/deployment-status@releases/v1
+        with:
+          token: ${{ secrets.GIT_PAT }}   
+          state: "failure"
+          deployment_id: ${{ steps.deployment.outputs.deployment_id }}
+                        
+            
