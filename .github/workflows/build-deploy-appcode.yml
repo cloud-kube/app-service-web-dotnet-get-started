@@ -15,7 +15,7 @@ on:
         - dev
         - stg
 #  pull_request:
-#  push:
+  push:
 env:  
   RUN_ID: ${{ github.event.inputs.run_id }}
   GITHUB_RUN_ID: ${{ github.run_id }}
@@ -36,6 +36,7 @@ jobs:
         run: |  
               Import-Module 'C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\Tools\Microsoft.VisualStudio.DevShell.dll'
               Enter-VsDevShell df0f207e
+              pwd
               MSBuild /p:'configuration="release";platform="any cpu";WebPublishMethod=Package;PackageFileName="package.zip";PackageAsSingleFile=true;DeployOnBuild=true;DeployTarget=Package'
       # - uses: actions/upload-artifact@v3
       #   with:
