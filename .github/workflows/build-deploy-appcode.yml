@@ -29,15 +29,19 @@ jobs:
     steps:  
       - name: Checkout repository and submodules
         uses: actions/checkout@v2
-      # - name: Add msbuild to PATH
-      #   uses: microsoft/setup-msbuild@v1.1
+      - name: Add msbuild to PATH
+        uses: microsoft/setup-msbuild@v1.1
+      - name: Setup NuGet
+      uses: NuGet/setup-nuget@v1.0.2
       - name: Building AppCode
         shell: powershell
+        working-directory: C:\Users\osadmin\actions-runner\_work
         run: |  
               Import-Module 'C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\Tools\Microsoft.VisualStudio.DevShell.dll'
               Enter-VsDevShell df0f207e
-              cd 'C:\Users\osadmin\actions-runner\_work\app-service-web-dotnet-get-started\app-service-web-dotnet-get-started'
-              MSBuild /p:'configuration="release";platform="any cpu";WebPublishMethod=Package;PackageFileName="package.zip";PackageAsSingleFile=true;DeployOnBuild=true;DeployTarget=Package'
+              cd '.\app-service-web-dotnet-get-started\app-service-web-dotnet-get-started'
+              MSBuild
+              #MSBuild /p:'configuration="release";platform="any cpu";WebPublishMethod=Package;PackageFileName="package.zip";PackageAsSingleFile=true;DeployOnBuild=true;DeployTarget=Package'
       # - uses: actions/upload-artifact@v3
       #   with:
       #     name: checkov-output
