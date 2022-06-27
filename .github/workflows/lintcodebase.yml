@@ -5,10 +5,10 @@ name: LintCodeBase
 
 on:
   workflow_dispatch:
-  push:
-   branches: [ master, feature/* ]
-  pull_request:
-    #branches-ignore:
+  # push:
+  #  branches: [ master, feature/* ]
+  # pull_request:
+  #   #branches-ignore:
       #- "master"
       #- '**'          # Disable for all branches!
 
