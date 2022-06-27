@@ -25,18 +25,18 @@ env:
   ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
 jobs:  
   Build-AppCode:
-    runs-on: windows-latest
+    runs-on: ais-windows
     steps:  
       - name: Checkout repository and submodules
         uses: actions/checkout@v2
-      - name: Add msbuild to PATH
-        uses: microsoft/setup-msbuild@v1.1
+      # - name: Add msbuild to PATH
+      #   uses: microsoft/setup-msbuild@v1.1
       - name: Building AppCode
-        shell: pwsh
+        shell: powershell
         run: |  
-              cd aspnet-get-started
-              MSBuild /p:'configuration="release";platform="any cpu";WebPublishMethod=Package;PackageFileName="package.zip";`
-              PackageAsSingleFile=true;DeployOnBuild=true;DeployTarget=Package'
+              Import-Module 'C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\Tools\Microsoft.VisualStudio.DevShell.dll'
+              Enter-VsDevShell df0f207e
+              MSBuild /p:'configuration="release";platform="any cpu";WebPublishMethod=Package;PackageFileName="package.zip";PackageAsSingleFile=true;DeployOnBuild=true;DeployTarget=Package'
       # - uses: actions/upload-artifact@v3
       #   with:
       #     name: checkov-output
