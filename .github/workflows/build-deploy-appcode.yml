@@ -34,7 +34,7 @@ jobs:
       - name: Building AppCode
         shell: pwsh
         run: |  
-              
+              cd aspnet-get-started
               MSBuild /p:'configuration="release";platform="any cpu";WebPublishMethod=Package;PackageFileName="package.zip";`
               PackageAsSingleFile=true;DeployOnBuild=true;DeployTarget=Package'
       # - uses: actions/upload-artifact@v3
